@@ -59,8 +59,7 @@
             suffix: 'Seconds',
             defaultValue: '60',
             required: true,
-            min: 1,
-            max: 600
+            min: 1
         },
         'dry-run': {
             type: 'boolean',
@@ -79,7 +78,6 @@
             defaultValue: '1',
             required: true,
             min: 1,
-            max: 16
         },
         'max-file-not-found': {
             type: 'integer',
@@ -138,8 +136,7 @@
             suffix: 'Seconds',
             defaultValue: '0',
             required: true,
-            min: 0,
-            max: 600
+            min: 0
         },
         'server-stat-of': {
             type: 'string'
@@ -167,8 +164,7 @@
             suffix: 'Seconds',
             defaultValue: '60',
             required: true,
-            min: 1,
-            max: 600
+            min: 1
         },
         'uri-selector': {
             type: 'option',
@@ -401,8 +397,7 @@
             suffix: 'Seconds',
             defaultValue: '60',
             required: true,
-            min: 1,
-            max: 600
+            min: 1
         },
         'bt-tracker-interval': {
             type: 'integer',
@@ -416,8 +411,7 @@
             suffix: 'Seconds',
             defaultValue: '60',
             required: true,
-            min: 1,
-            max: 600
+            min: 1
         },
         'dht-file-path': {
             type: 'string',

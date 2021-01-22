@@ -2,6 +2,18 @@
 [![License](https://img.shields.io/github/license/mayswind/AriaNg-Native.svg?style=flat)](https://github.com/mayswind/AriaNg-Native/blob/master/LICENSE)
 [![Lastest Release](https://img.shields.io/github/release/mayswind/AriaNg-Native.svg?style=flat)](https://github.com/mayswind/AriaNg-Native/releases)
 
+## Mod
+Used projects:
+[https://github.com/oureveryday/aria2_Mod](https://github.com/oureveryday/aria2_Mod)
+[https://github.com/oureveryday/AriaNg_Mod](https://github.com/oureveryday/AriaNg_Mod)
+
+* start.bat: start AriaNg Native with aria2 RPC
+* Openconf.bat: Open aria2 config file
+* Origconf.bat: Return to original config
+
+Default thread is modded to 128.
+Thread limit is removed.
+
 ## Introduction
 AriaNg Native is a desktop application built by [Electron](https://github.com/electron/electron), containing full feature of [AriaNg](https://github.com/mayswind/AriaNg). You can run AriaNg Native on Windows or macOS without any browser. In addition, AriaNg Native also has many features that [AriaNg](https://github.com/mayswind/AriaNg) cannot implement.
 
