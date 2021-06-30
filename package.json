@@ -5,8 +5,8 @@
   },
   "name": "ariang-native",
   "appId": "net.mayswind.ariang",
-  "version": "1.2.1",
-  "ariang-version": "1.2.1",
+  "version": "1.2.2",
+  "ariang-version": "1.2.2",
   "description": "A better aria2 desktop frontend than AriaNg, containing all features of AriaNg and more features for desktop.",
   "main": "main/main.js",
   "entry": "app/index.html",
@@ -38,8 +38,8 @@
   },
   "homepage": "http://ariang.mayswind.net/",
   "devDependencies": {
-    "electron": "^9.4.2",
-    "electron-builder": "^22.9.1",
+    "electron": "^12.0.11",
+    "electron-builder": "^22.11.7",
     "fs-extra": "^8.1.0",
     "jsonfile": "^6.0.1",
     "rimraf": "^3.0.2"
@@ -150,7 +150,15 @@
     "mac": {
       "category": "public.app-category.utilities",
       "icon": "assets/AriaNg.icns",
-      "target": "dmg",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
       "fileAssociations": [
         {
           "ext": [
@@ -165,7 +173,8 @@
           ],
           "icon": "assets/AriaNg_Metalink.icns"
         }
-      ]
+      ],
+      "darkModeSupport": true
     },
     "dmg": {
       "icon": "assets/AriaNg.icns"

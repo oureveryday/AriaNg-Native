@@ -2,10 +2,48 @@
     'use strict';
 
     angular.module('ariaNg').controller('TaskDetailController', ['$rootScope', '$scope', '$routeParams', '$interval', 'clipboard', 'aria2RpcErrors', 'ariaNgFileTypes', 'ariaNgCommonService', 'ariaNgSettingService', 'ariaNgMonitorService', 'aria2TaskService', 'aria2SettingService', 'ariaNgNativeElectronService', function ($rootScope, $scope, $routeParams, $interval, clipboard, aria2RpcErrors, ariaNgFileTypes, ariaNgCommonService, ariaNgSettingService, ariaNgMonitorService, aria2TaskService, aria2SettingService, ariaNgNativeElectronService) {
-        var tabOrders = ['overview', 'pieces', 'filelist', 'btpeers'];
+        var tabStatusItems = [
+            {
+                name: 'overview',
+                show: true
+            },
+            {
+                name: 'pieces',
+                show: true
+            },
+            {
+                name: 'filelist',
+                show: true
+            },
+            {
+                name: 'btpeers',
+                show: true
+            }
+        ];
         var downloadTaskRefreshPromise = null;
         var pauseDownloadTaskRefresh = false;
         var currentRowTriggeredMenu = null;
+
+        var getVisibleTabOrders = function () {
+            var items = [];
+
+            for (var i = 0; i < tabStatusItems.length; i++) {
+                if (tabStatusItems[i].show) {
+                    items.push(tabStatusItems[i].name);
+                }
+            }
+
+            return items;
+        };
+
+        var setTabItemShow = function (name, status) {
+            for (var i = 0; i < tabStatusItems.length; i++) {
+                if (tabStatusItems[i].name === name) {
+                    tabStatusItems[i].show = status;
+                    break;
+                }
+            }
+        };
 
         var getAvailableOptions = function (status, isBittorrent) {
             var keys = aria2SettingService.getAvailableTaskOptionKeys(status, isBittorrent);
@@ -15,16 +53,33 @@
             });
         };
 
+        var isShowPiecesInfo = function (task) {
+            var showPiecesInfoSetting = ariaNgSettingService.getShowPiecesInfoInTaskDetailPage();
+
+            if (!task || showPiecesInfoSetting === 'never') {
+                return false;
+            }
+
+            if (showPiecesInfoSetting === 'le102400') {
+                return task.numPieces <= 102400;
+            } else if (showPiecesInfoSetting === 'le10240') {
+                return task.numPieces <= 10240;
+            } else if (showPiecesInfoSetting === 'le1024') {
+                return task.numPieces <= 1024;
+            }
+
+            return true; // showPiecesInfoSetting === 'always'
+        };
+
         var processTask = function (task) {
             if (!task) {
                 return;
             }
 
-            if (task.status !== 'active' || !task.bittorrent) {
-                if (tabOrders.indexOf('btpeers') >= 0) {
-                    tabOrders.splice(tabOrders.indexOf('btpeers'), 1);
-                }
-            }
+            $scope.context.showPiecesInfo = isShowPiecesInfo(task);
+
+            setTabItemShow('pieces', $scope.context.showPiecesInfo);
+            setTabItemShow('btpeers', task.status === 'active' && task.bittorrent);
 
             if (!$scope.task || $scope.task.status !== task.status) {
                 $scope.context.availableOptions = getAvailableOptions(task.status, !!task.bittorrent);
@@ -203,6 +258,7 @@
         $scope.context = {
             currentTab: 'overview',
             isEnableSpeedChart: ariaNgSettingService.getDownloadTaskRefreshInterval() > 0,
+            showPiecesInfo: ariaNgSettingService.getShowPiecesInfoInTaskDetailPage() !== 'never',
             showChooseFilesToolbar: false,
             fileExtensions: [],
             collapsedDirs: {},
@@ -227,10 +283,11 @@
         };
 
         $rootScope.swipeActions.extendLeftSwipe = function () {
-            var tabIndex = tabOrders.indexOf($scope.context.currentTab);
+            var tabItems = getVisibleTabOrders();
+            var tabIndex = tabItems.indexOf($scope.context.currentTab);
 
-            if (tabIndex < tabOrders.length - 1) {
-                $scope.changeTab(tabOrders[tabIndex + 1]);
+            if (tabIndex < tabItems.length - 1) {
+                $scope.changeTab(tabItems[tabIndex + 1]);
                 return true;
             } else {
                 return false;
@@ -238,10 +295,11 @@
         };
 
         $rootScope.swipeActions.extendRightSwipe = function () {
-            var tabIndex = tabOrders.indexOf($scope.context.currentTab);
+            var tabItems = getVisibleTabOrders();
+            var tabIndex = tabItems.indexOf($scope.context.currentTab);
 
             if (tabIndex > 0) {
-                $scope.changeTab(tabOrders[tabIndex - 1]);
+                $scope.changeTab(tabItems[tabIndex - 1]);
                 return true;
             } else {
                 return false;

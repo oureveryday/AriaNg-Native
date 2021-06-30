@@ -251,6 +251,10 @@
             ariaNgSettingService.setIncludePrefixWhenCopyingFromTaskDetails(value);
         };
 
+        $scope.setShowPiecesInfoInTaskDetailPage = function (value) {
+            ariaNgSettingService.setShowPiecesInfoInTaskDetailPage(value);
+        };
+
         $scope.setAfterRetryingTask = function (value) {
             ariaNgSettingService.setAfterRetryingTask(value);
         };
@@ -348,7 +352,7 @@
         $scope.removeRpcSetting = function (setting) {
             var rpcName = (setting.rpcAlias ? setting.rpcAlias : setting.rpcHost + ':' + setting.rpcPort);
 
-            ariaNgLocalizationService.confirm('Confirm Remove', 'Are you sure you want to remove rpc setting "{{rpcName}}"?', 'warning', function () {
+            ariaNgLocalizationService.confirm('Confirm Remove', 'Are you sure you want to remove rpc setting "{rpcName}"?', 'warning', function () {
                 setNeedRefreshPage();
 
                 var currentIndex = $scope.getCurrentRpcTabIndex();

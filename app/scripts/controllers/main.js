@@ -262,7 +262,7 @@
                 $rootScope.loadPromise = aria2TaskService.retryTasks(retryableTasks, function (response) {
                     refreshGlobalStat(true);
 
-                    ariaNgLocalizationService.showInfo('Operation Result', '{{successCount}} tasks have been retried and {{failedCount}} tasks are failed.', function () {
+                    ariaNgLocalizationService.showInfo('Operation Result', '{successCount} tasks have been retried and {failedCount} tasks are failed.', function () {
                         var actionAfterRetryingTask = ariaNgSettingService.getAfterRetryingTask();
 
                         if (response.hasSuccess) {
@@ -422,7 +422,13 @@
             }
 
             ariaNgSettingService.setDefaultRpcSetting(setting);
-            $window.location.reload();
+
+            if ($location.path().indexOf('/task/detail/') === 0) {
+                $rootScope.setAutoRefreshAfterPageLoad();
+                $location.path('/downloading');
+            } else {
+                $window.location.reload();
+            }
         };
 
         $scope.minimizeWindow = function () {
