@@ -7,9 +7,10 @@ Used projects:
 [https://github.com/oureveryday/aria2_Mod](https://github.com/oureveryday/aria2_Mod)
 [https://github.com/oureveryday/AriaNg_Mod](https://github.com/oureveryday/AriaNg_Mod)
 
-* start.bat: start AriaNg Native with aria2 RPC
-* Openconf.bat: Open aria2 config file
-* Origconf.bat: Return to original config
+* start.vbs: start AriaNg Native with aria2 RPC 
+* startrealtime.vbs: start AriaNg Native with aria2 RPC realtime 
+* Openconf.bat: Open aria2 config file 
+* Origconf.bat: Return to original config 
 
 Default thread is modded to 128.
 Thread limit is removed.
