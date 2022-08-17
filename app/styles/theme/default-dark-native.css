@@ -1,0 +1,33 @@
+/* drop zone */
+.theme-dark.skin-aria-ng .dropzone {
+    background: rgba(0, 0, 0, 0.85);
+}
+
+.theme-dark.skin-aria-ng .dropzone .dropzone-tip-container .dropzone-tip-wrapper {
+    border: 6px dashed #444;
+}
+
+/* native-info-table */
+.theme-dark.skin-aria-ng .native-info-table {
+    background-color: #1a1a1a;
+}
+
+.theme-dark.skin-aria-ng .native-info-table.table-bordered {
+    border: 1px solid #333;
+}
+
+.theme-dark.skin-aria-ng .native-info-table > div.row {
+    border-color: #333;
+}
+
+.theme-dark.skin-aria-ng .native-info-table.striped > div.row:nth-of-type(odd) {
+    background-color: #202020;
+}
+
+.theme-dark.skin-aria-ng .native-info-table.hoverable > div.row:hover {
+    background-color: #242424;
+}
+
+.theme-dark.skin-aria-ng .native-info-table.hoverable > div.row:nth-of-type(odd).no-hover:hover {
+    background-color: #202020;
+}
