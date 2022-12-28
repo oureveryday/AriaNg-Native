@@ -4,104 +4,82 @@ const os = require('os');
 const electron = require('electron');
 const electronLocalshortcut = require('electron-localshortcut');
 
-const pkgfile = require('../package');
-const config = require('./config');
 const core = require('./core');
 const cmd = require('./cmd');
-const ipc = require('./ipc');
-const menu = require('./menu');
-const tray = require('./tray');
+const config = require('./config/config');
+const constants = require('./config/constants');
+const menu = require('./components/menu');
+const tray = require('./components/tray');
+const file = require('./lib/file');
+const page = require('./lib/page');
+const websocket = require('./lib/websocket');
+const process = require('./lib/process');
+const ipcRender = require('./ipc/render-proecss');
+require('./ipc/main-process');
 
 const app = electron.app;
 const BrowserWindow = electron.BrowserWindow;
 
-const singletonLock = app.requestSingleInstanceLock();
+const singletonLock = app.requestSingleInstanceLock({
+    argv: cmd.argv
+});
 
-if (!singletonLock) {
-    app.quit();
-}
-
-let filePathInCommandLine = process.argv.length > 1 && process.argv[1];
-
-function isEnableCloseToHide() {
+let isEnableCloseToHide = function() {
     return (tray.isEnabled() || os.platform() === 'darwin') && config.minimizedToTray;
-}
-
-global.settings = {
-    version: pkgfile.version,
-    ariaNgVersion: pkgfile["ariang-version"],
-    isDevMode: cmd.argv.development,
-    useCustomAppTitle: false
 };
 
-if (!app.isPackaged) {
-    global.settings.isDevMode = true;
-}
+let executeCustomCommand = function () {
+    const options = {
+        command: config.execCommandOnStartup,
+        args: config.execCommandArgumentsOnStartup,
+        detached: config.execDetachedCommandOnStartup,
+    };
 
-app.setAppUserModelId(pkgfile.appId);
+    options.onoutput = function (output) {
+        if (!core.isDevMode) {
+            return;
+        }
 
-if (os.platform() === 'win32' && !cmd.argv.classic) {
-    global.settings.useCustomAppTitle = true;
-}
+        const lastOutput = (core.startupCommandOutput.length > 1 ? core.startupCommandOutput[core.startupCommandOutput.length - 1] : null);
 
-if (os.platform() === 'darwin') {
-    app.on('will-finish-launching', () => {
-        app.on('open-file', (event, filePath) => {
-            if (filePath) {
-                filePathInCommandLine = filePath;
+        if (lastOutput && lastOutput.source === output.source && lastOutput.content === output.content) {
+            lastOutput.count++
+        } else {
+            if (core.startupCommandOutput.length >= constants.startupCommandConstants.outputLogLimit) {
+                core.startupCommandOutput.shift();
             }
+
+            core.startupCommandOutput.push({
+                time: new Date(),
+                type: 'output',
+                source: output.source,
+                content: output.content,
+                count: output.count
+            });
+        }
+    };
+
+    options.onerror = function (error) {
+        if (!core.isDevMode) {
+            return;
+        }
+
+        if (core.startupCommandOutput.length >= constants.startupCommandConstants.outputLogLimit) {
+            core.startupCommandOutput.shift();
+        }
+
+        core.startupCommandOutput.push({
+            time: new Date(),
+            type: 'error',
+            source: error.type,
+            content: error.error
         });
-    });
+    };
 
-    app.on('before-quit', () => {
-        core.isConfirmExit = true;
-    });
+    process.execCommandAsync(options);
+};
 
-    app.on('activate', () => {
-        if (core.mainWindow) {
-            core.mainWindow.show();
-        }
-    });
-}
-
-app.on('window-all-closed', () => {
-    app.quit();
-});
-
-app.on('second-instance', (event, argv, workingDirectory) => {
-    if (core.mainWindow) {
-        if (core.mainWindow.isMinimized()) {
-            core.mainWindow.restore();
-        } else if (!core.mainWindow.isVisible()) {
-            core.mainWindow.show();
-        }
-
-        core.mainWindow.focus();
-
-        if (ipc.isContainsSupportedFileArg(argv[1])) {
-            ipc.asyncNewTaskFromFile(argv[1]);
-            ipc.navigateToNewTask();
-        }
-    }
-});
-
-app.on('ready', () => {
-    core.mainWindow = new BrowserWindow({
-        title: 'AriaNg Native',
-        width: config.width,
-        height: config.height,
-        minWidth: 800,
-        minHeight: 400,
-        fullscreenable: false,
-        frame: !global.settings.useCustomAppTitle,
-        show: false,
-        webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false,
-            enableRemoteModule: true
-        }
-    });
-
+let setWindowPositionAndSize = function () {
     let displays = electron.screen.getAllDisplays();
     let isLastPositionInScreen = false;
 
@@ -128,109 +106,247 @@ app.on('ready', () => {
     if (config.maximized) {
         core.mainWindow.maximize();
     }
+};
 
-    if (global.settings.isDevMode) {
-        electronLocalshortcut.register(core.mainWindow, 'F12', () => {
+let registerDevToolShortcut = function () {
+    electronLocalshortcut.register(core.mainWindow, 'F12', () => {
+        if (core.isDevMode) {
             core.mainWindow.webContents.openDevTools();
+        }
+    });
+
+    if (os.platform() === 'darwin') {
+        electronLocalshortcut.register(core.mainWindow, 'Cmd+Alt+I', () => {
+            if (core.isDevMode) {
+                core.mainWindow.webContents.openDevTools();
+            }
+        });
+    }
+};
+
+let main = function () {
+    if (!singletonLock) {
+        app.quit();
+        return;
+    }
+
+    app.setAppUserModelId(core.appid);
+
+    core.isDevMode = !app.isPackaged || cmd.argv.development;
+    core.useCustomAppTitle = os.platform() === 'win32' && !cmd.argv.classic;
+
+    let filePathInCommandLine = cmd.argv.file;
+
+    if (os.platform() === 'darwin') {
+        app.on('will-finish-launching', () => {
+            app.on('open-file', (event, filePath) => {
+                event.preventDefault();
+
+                if (!filePath) {
+                    return;
+                }
+
+                if (core.mainWindow && core.mainWindow.webContents) {
+                    let location = page.parseLocationFromFullUrl(core.mainWindow.webContents.getURL());
+
+                    if (location.indexOf('/new') === 0) {
+                        ipcRender.notifyRenderProcessNewTaskFromFile(filePath);
+                    } else {
+                        ipcRender.notifyRenderProcessNewNewTaskFromFileAfterViewLoaded(filePath);
+                        ipcRender.notifyRenderProcessNavigateToNewTask();
+                    }
+                } else {
+                    filePathInCommandLine = filePath;
+                }
+            });
+        });
+
+        app.on('before-quit', () => {
+            core.isConfirmExit = true;
+        });
+
+        app.on('activate', () => {
+            if (core.mainWindow) {
+                core.mainWindow.show();
+            }
         });
     }
 
-    menu.init();
-    tray.init();
-
-    if (ipc.isContainsSupportedFileArg(filePathInCommandLine)) {
-        ipc.asyncNewTaskFromFile(filePathInCommandLine);
-        ipc.loadNewTaskUrl();
-    } else {
-        ipc.loadIndexUrl();
+    if (config.execCommandOnStartup) {
+        executeCustomCommand();
     }
 
-    core.mainWindow.once('ready-to-show', () => {
-        core.mainWindow.show();
+    app.on('window-all-closed', () => {
+        app.quit();
     });
 
-    core.mainWindow.on('resize', () => {
-        let sizes = core.mainWindow.getSize();
-        config.width = sizes[0];
-        config.height = sizes[1];
-    });
-
-    core.mainWindow.on('maximize', () => {
-        config.maximized = core.mainWindow.isMaximized();
-    });
-
-    core.mainWindow.on('unmaximize', () => {
-        config.maximized = core.mainWindow.isMaximized();
-    });
-
-    core.mainWindow.on('move', () => {
-        let positions = core.mainWindow.getPosition();
-        config.x = positions[0];
-        config.y = positions[1];
-    });
-
-    core.mainWindow.on('close', (event) => {
-        if (isEnableCloseToHide() && !core.isConfirmExit) {
-            event.preventDefault();
-            core.mainWindow.hide();
-            event.returnValue = false;
-        }
-    });
-
-    core.mainWindow.on('closed', () => {
-        try {
-            if (!config.maximized) {
-                if (config.width > 0) {
-                    config.save('width');
-                }
-
-                if (config.height > 0) {
-                    config.save('height');
-                }
-
-                if (config.x > 0 && config.y > 0) {
-                    config.save('x');
-                    config.save('y');
-                }
+    app.on('second-instance', (event, argv, workingDirectory, additionalData) => {
+        if (core.mainWindow) {
+            if (core.mainWindow.isMinimized()) {
+                core.mainWindow.restore();
+            } else if (!core.mainWindow.isVisible()) {
+                core.mainWindow.show();
             }
 
-            config.save('maximized');
-        } catch (ex) {
-            ; // Do Nothing
-        }
+            core.mainWindow.focus();
 
-        core.mainWindow = null;
+            let secondInstanceArgv = null;
+
+            if (additionalData) {
+                secondInstanceArgv = additionalData.argv;
+            }
+
+            if (!secondInstanceArgv) {
+                secondInstanceArgv = cmd.parseArguments(argv);
+            }
+
+            if (secondInstanceArgv && secondInstanceArgv.development) {
+                core.isDevMode = !!secondInstanceArgv.development;
+                ipcRender.notifyRenderProcessChangeDevMode(core.isDevMode);
+            }
+
+            if (secondInstanceArgv && secondInstanceArgv.file && file.isContainsSupportedFileArg(secondInstanceArgv.file)) {
+                let location = '';
+
+                if (core.mainWindow.webContents) {
+                    location = page.parseLocationFromFullUrl(core.mainWindow.webContents.getURL());
+                }
+
+                if (location.indexOf('/new') === 0) {
+                    ipcRender.notifyRenderProcessNewTaskFromFile(secondInstanceArgv.file);
+                } else {
+                    ipcRender.notifyRenderProcessNewNewTaskFromFileAfterViewLoaded(secondInstanceArgv.file);
+                    ipcRender.notifyRenderProcessNavigateToNewTask();
+                }
+            }
+        }
     });
 
-    ipc.onNewDropFile((event, arg) => {
-        if (!arg) {
-            return;
-        }
+    app.on('ready', () => {
+        core.mainWindow = new BrowserWindow({
+            title: 'AriaNg Native',
+            width: config.width,
+            height: config.height,
+            minWidth: 800,
+            minHeight: 400,
+            fullscreenable: false,
+            frame: !core.useCustomAppTitle,
+            show: false,
+            webPreferences: {
+                nodeIntegration: true,
+                contextIsolation: false,
+                spellcheck: false
+            }
+        });
 
-        let filePath = arg.filePath;
-        let location = arg.location;
+        setWindowPositionAndSize();
+        registerDevToolShortcut();
 
-        if (location.indexOf('/new') === 0) {
-            ipc.newTaskFromFile(filePath);
+        menu.init();
+        tray.init();
+
+        if (file.isContainsSupportedFileArg(filePathInCommandLine)) {
+            ipcRender.notifyRenderProcessNewNewTaskFromFileAfterViewLoaded(filePathInCommandLine);
+            core.mainWindow.loadURL(page.getPageFullUrl(constants.ariaNgPageLocations.NewTask));
         } else {
-            ipc.asyncNewTaskFromFile(filePath);
-            ipc.navigateToNewTask();
+            core.mainWindow.loadURL(page.getPageFullUrl());
         }
+
+        core.mainWindow.once('ready-to-show', () => {
+            core.mainWindow.show();
+        });
+
+        core.mainWindow.on('resize', () => {
+            let sizes = core.mainWindow.getSize();
+            config.width = sizes[0];
+            config.height = sizes[1];
+        });
+
+        core.mainWindow.on('maximize', () => {
+            config.maximized = core.mainWindow.isMaximized();
+            ipcRender.notifyRenderProcessWindowMaximized(core.mainWindow.isMaximized());
+        });
+
+        core.mainWindow.on('unmaximize', () => {
+            config.maximized = core.mainWindow.isMaximized();
+            ipcRender.notifyRenderProcessWindowUnmaximized(core.mainWindow.isMaximized());
+        });
+
+        core.mainWindow.on('move', () => {
+            let positions = core.mainWindow.getPosition();
+            config.x = positions[0];
+            config.y = positions[1];
+        });
+
+        core.mainWindow.on('close', (event) => {
+            if (isEnableCloseToHide() && !core.isConfirmExit) {
+                event.preventDefault();
+                core.mainWindow.hide();
+                event.returnValue = false;
+            }
+        });
+
+        core.mainWindow.on('closed', () => {
+            try {
+                if (!config.maximized) {
+                    if (config.width > 0) {
+                        config.save('width');
+                    }
+
+                    if (config.height > 0) {
+                        config.save('height');
+                    }
+
+                    if (config.x > 0 && config.y > 0) {
+                        config.save('x');
+                        config.save('y');
+                    }
+                }
+
+                config.save('maximized');
+            } catch (ex) {
+                ; // Do Nothing
+            }
+
+            core.mainWindow = null;
+        });
+
+        ipcRender.onRenderProcessElectronServiceInited((event) => {
+            websocket.init();
+        });
+
+        ipcRender.onRenderProcessNewDropFile((event, arg) => {
+            if (!arg) {
+                return;
+            }
+
+            let filePath = arg.filePath;
+            let location = arg.location;
+
+            if (location.indexOf('/new') === 0) {
+                ipcRender.notifyRenderProcessNewTaskFromFile(filePath);
+            } else {
+                ipcRender.notifyRenderProcessNewNewTaskFromFileAfterViewLoaded(filePath);
+                ipcRender.notifyRenderProcessNavigateToNewTask();
+            }
+        });
+
+        ipcRender.onRenderProcessNewDropText((event, arg) => {
+            if (!arg) {
+                return;
+            }
+
+            let text = arg.text;
+            let location = arg.location;
+
+            if (location.indexOf('/new') === 0) {
+                ipcRender.notifyRenderProcessNewTaskFromText(text);
+            } else {
+                ipcRender.notifyRenderProcessNewNewTaskFromTextAfterViewLoaded(text);
+                ipcRender.notifyRenderProcessNavigateToNewTask();
+            }
+        });
     });
+}
 
-    ipc.onNewDropText((event, arg) => {
-        if (!arg) {
-            return;
-        }
-
-        let text = arg.text;
-        let location = arg.location;
-
-        if (location.indexOf('/new') === 0) {
-            ipc.newTaskFromText(text);
-        } else {
-            ipc.asyncNewTaskFromText(text);
-            ipc.navigateToNewTask();
-        }
-    });
-});
+main();

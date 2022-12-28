@@ -7,8 +7,7 @@
             <li class="nav-tab-title-rpcname" ng-repeat="setting in context.rpcSettings" ng-class="{'active': isCurrentRpcTab($index)}">
                 <a class="pointer-cursor" ng-click="changeRpcTab($index)">
                     <span class="nav-tab-rpcname" ng-bind="'RPC' + (setting.rpcAlias || setting.rpcHost ? ' (' + (setting.rpcAlias ? setting.rpcAlias : setting.rpcHost + ':' + setting.rpcPort) + ')' : '')" title="{{(setting.rpcAlias ? setting.rpcAlias : setting.rpcHost + ':' + setting.rpcPort)}}">RPC</span>
-                </a>
-                <a class="pointer-cursor nav-tab-close" ng-if="!setting.isDefault" title="{{'Delete RPC Setting' | translate}}">
+                </a><a class="pointer-cursor nav-tab-close" ng-if="!setting.isDefault" title="{{'Delete RPC Setting' | translate}}">
                     <i class="fa fa-times" ng-click="removeRpcSetting(setting)"></i>
                 </a>
             </li>
@@ -24,12 +23,19 @@
                     <div class="row" ng-if="context.ariaNgVersion">
                         <div class="setting-key col-sm-4">
                             <span translate>AriaNg Version</span>
+                            <i class="icon-expand pointer-cursor fa"
+                               ng-class="{'fa-plus': context.ariaNgVerboseVersionCollapsed, 'fa-minus': !context.ariaNgVerboseVersionCollapsed}"
+                               ng-click="context.ariaNgVerboseVersionCollapsed = !context.ariaNgVerboseVersionCollapsed"
+                               title="{{(context.ariaNgVerboseVersionCollapsed ? 'Expand' : 'Collapse') | translate}}"></i>
                         </div>
                         <div class="setting-value col-sm-8">
-                            <span ng-bind="'AriaNg Native ' + context.ariaNgNativeVersion + ' (AriaNg ' + context.ariaNgVersion + ')'"></span>
+                            <span ng-bind="'AriaNg Native ' + context.ariaNgNativeVersion + (context.buildCommit ? ' (' + context.buildCommit + ')' : '')"></span>
                             <button class="btn btn-xs btn-default" ng-click="checkUpdate()" ng-disabled="context.isCurrentLatestVersion" promise-btn>
                                 <span ng-bind="(context.isCurrentLatestVersion ? 'Latest Version' : 'Check Update') | translate" translate>Check Update</span>
                             </button>
+                            <span class="multi-line" ng-if="!context.ariaNgVerboseVersionCollapsed">
+                                <span ng-bind="('Based on' | translate) + ' AriaNg ' + context.ariaNgVersion"></span>
+                            </span>
                         </div>
                     </div>
                     <div class="row" ng-if="context.runtimeEnvironment">
@@ -69,6 +75,31 @@
                             </select>
                         </div>
                     </div>
+                    <div class="row" ng-if="context.showDebugMode">
+                        <div class="setting-key setting-key-without-desc col-sm-4">
+                            <span translate>Debug Mode</span>
+                        </div>
+                        <div class="setting-value col-sm-8">
+                            <select class="form-control" style="width: 100%;" ng-model="context.sessionSettings.debugMode"
+                                    ng-options="option.value as (option.name | translate) for option in context.trueFalseOptions"
+                                    ng-change="setDebugMode(context.sessionSettings.debugMode)">
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="setting-key setting-key-without-desc col-sm-4">
+                            <span translate>Check for Updates on Startup</span>
+                        </div>
+                        <div class="setting-value col-sm-8">
+                            <select class="form-control" style="width: 100%;" ng-model="context.settings.autoCheckUpdates"
+                                    ng-change="setAutoCheckUpdates(context.settings.autoCheckUpdates)">
+                                <option value="never" translate>Never</option>
+                                <option value="daily" translate>Daily</option>
+                                <option value="weekly" translate>Weekly</option>
+                                <option value="monthly" translate>Monthly</option>
+                            </select>
+                        </div>
+                    </div>
                     <div class="row">
                         <div class="setting-key setting-key-without-desc col-sm-4">
                             <span translate>Page Title</span>
@@ -93,13 +124,78 @@
                     </div>
                     <div class="row" ng-if="isSupportNotification()">
                         <div class="setting-key setting-key-without-desc col-sm-4">
-                            <span translate>Enable Browser Notification</span>
+                            <span translate>Enable System Notification</span>
                         </div>
                         <div class="setting-value col-sm-8">
                             <select class="form-control" style="width: 100%;"
                                     ng-model="context.settings.browserNotification"
                                     ng-change="setEnableBrowserNotification(context.settings.browserNotification)"
                                     ng-options="option.value as (option.name | translate) for option in context.trueFalseOptions">
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row" ng-if="isSupportNotification() && context.settings.browserNotification">
+                        <div class="setting-key setting-key-without-desc col-sm-4">
+                            <span translate>System Notification Sound</span>
+                        </div>
+                        <div class="setting-value col-sm-8">
+                            <select class="form-control" style="width: 100%;"
+                                    ng-model="context.settings.browserNotificationSound"
+                                    ng-change="setBrowserNotificationSound(context.settings.browserNotificationSound)"
+                                    ng-options="option.value as (option.name | translate) for option in context.trueFalseOptions">
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row" ng-if="isSupportNotification() && context.settings.browserNotification">
+                        <div class="setting-key setting-key-without-desc col-sm-4">
+                            <span translate>System Notification Frequency</span>
+                        </div>
+                        <div class="setting-value col-sm-8">
+                            <select class="form-control" style="width: 100%;" ng-model="context.settings.browserNotificationFrequency"
+                                    ng-change="setBrowserNotificationFrequency(context.settings.browserNotificationFrequency)">
+                                <option value="unlimited" translate>Unlimited</option>
+                                <option value="high" translate>High (Up to 10 Notifications / 1 Minute)</option>
+                                <option value="middle" translate>Middle (Up to 1 Notification / 1 Minute)</option>
+                                <option value="low" translate>Low (Up to 1 Notification / 5 Minutes)</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row" ng-if="isSupportMessagePush()">
+                        <div class="setting-key setting-key-without-desc col-sm-4">
+                            <span translate>Play Sound After Download Finished</span>
+                        </div>
+                        <div class="setting-value col-sm-8">
+                            <div class="input-group">
+                                <input class="form-control" type="text" readonly="readonly"
+                                       ng-model="context.settings.playSoundAfterDownloadFinished"/>
+                                <div class="input-group-btn">
+                                    <button type="button" class="btn btn-default" ng-click="browseAndSetPlaySoundAfterDownloadFinished()">
+                                        <span translate>Browse</span>
+                                    </button>
+                                    <button type="button" class="btn btn-default dropdown-toggle" data-toggle="dropdown"
+                                            ng-disabled="!context.settings.playSoundAfterDownloadFinished">
+                                        <span class="caret"></span>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-right">
+                                        <li><a class="pointer-cursor" ng-click="playSound()" translate>Play Sound</a></li>
+                                        <li><a class="pointer-cursor" ng-click="stopPlayingSound()" translate>Stop Playing Sound</a></li>
+                                        <li class="divider"></li>
+                                        <li><a class="pointer-cursor" ng-click="clearPlaySoundAfterDownloadFinished()" translate>Clear</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row" ng-if="context.isSupportReconnect">
+                        <div class="setting-key setting-key-without-desc col-sm-4">
+                            <span translate>WebSocket Auto Reconnect Interval</span>
+                            <span class="asterisk">*</span>
+                        </div>
+                        <div class="setting-value col-sm-8">
+                            <select class="form-control" style="width: 100%;"
+                                    ng-model="context.settings.webSocketReconnectInterval"
+                                    ng-change="setWebSocketReconnectInterval(context.settings.webSocketReconnectInterval)"
+                                    ng-options="time.optionValue as (time.name | translate: {value: time.value}) for time in context.availableTime">
                             </select>
                         </div>
                     </div>
@@ -139,6 +235,26 @@
                                     ng-model="context.settings.downloadTaskRefreshInterval"
                                     ng-change="setDownloadTaskRefreshInterval(context.settings.downloadTaskRefreshInterval)"
                                     ng-options="time.optionValue as (time.name | translate: {value: time.value}) for time in context.availableTime">
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="setting-key setting-key-without-desc col-sm-4">
+                            <span translate>Keyboard Shortcuts</span>
+                            <i class="icon-primary fa fa-question-circle" data-toggle="popover"
+                               data-trigger="hover" data-placement="auto right" data-container="body" data-html="true"
+                               data-content="{{('Supported Keyboard Shortcuts' | translate) + ':<br/>' +
+                               ('Remove Selected Task' | translate) + ': <span class=\'keyboard-key\'>Delete</span><br/>' +
+                               ('Select All Tasks' | translate) + ': ' + (!context.isMacKeyboardLike ? '<span class=\'keyboard-key\'>Ctrl</span>+<span class=\'keyboard-key\'>A</span>' : '<span class=\'keyboard-key\'>Command</span>+<span class=\'keyboard-key\'>A</span>') + '<br/>' +
+                               ('Set Focus On Search Box' | translate) + ': ' + (!context.isMacKeyboardLike ? '<span class=\'keyboard-key\'>Ctrl</span>+<span class=\'keyboard-key\'>F</span>' : '<span class=\'keyboard-key\'>Command</span>+<span class=\'keyboard-key\'>F</span>') + '<br/>' +
+                               ('Create New Task' | translate) + ': ' + (!context.isMacKeyboardLike ? '<span class=\'keyboard-key\'>Ctrl</span>+<span class=\'keyboard-key\'>N</span>' : '<span class=\'keyboard-key\'>Command</span>+<span class=\'keyboard-key\'>N</span>') + '<br/>' +
+                               ('Download Now' | translate) + ': ' + (!context.isMacKeyboardLike ? '<span class=\'keyboard-key\'>Ctrl</span>+<span class=\'keyboard-key\'>Enter</span>' : '<span class=\'keyboard-key\'>Command</span>+<span class=\'keyboard-key\'>Return</span>') +
+                               (isEnableDebugMode() ? ('<br/>' + ('Open Browser DevTools' | translate) + ': ' + (!context.isMacKeyboardLike ? '<span class=\'keyboard-key\'>F12</span>' : '<span class=\'keyboard-key\'>Command</span>+<span class=\'keyboard-key\'>Option</span>+<span class=\'keyboard-key\'>I</span>')) : '')}}"></i>
+                        </div>
+                        <div class="setting-value col-sm-8">
+                            <select class="form-control" style="width: 100%;" ng-model="context.settings.keyboardShortcuts"
+                                    ng-change="setKeyboardShortcuts(context.settings.keyboardShortcuts)"
+                                    ng-options="option.value as (option.name | translate) for option in context.trueFalseOptions">
                             </select>
                         </div>
                     </div>
@@ -264,6 +380,46 @@
                     </div>
                     <div class="row">
                         <div class="setting-key setting-key-without-desc col-sm-4">
+                            <span translate>Execute Command on Startup</span>
+                        </div>
+                        <div class="setting-value col-sm-8">
+                            <div class="input-group">
+                                <input class="form-control" type="text"
+                                       ng-model="context.nativeSettings.execCommandOnStartup"
+                                       ng-change="setExecCommandOnStartup(context.nativeSettings.execCommandOnStartup)"/>
+                                <div class="input-group-btn">
+                                    <button type="button" class="btn btn-default" ng-click="browseAndSetExecCommandOnStartup()">
+                                        <span translate>Browse</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row" ng-if="context.nativeSettings.execCommandOnStartup">
+                        <div class="setting-key setting-key-without-desc col-sm-4">
+                            <span translate>Execute Command Arguments on Startup</span>
+                        </div>
+                        <div class="setting-value col-sm-8">
+                            <textarea class="form-control" rows="3"
+                                      ng-placeholder="'Support multiple arguments, one argument per line.' | translate"
+                                      ng-model="context.nativeSettings.execCommandArgumentsOnStartup"
+                                      ng-change="setExecCommandArgumentsOnStartup(context.nativeSettings.execCommandArgumentsOnStartup)"></textarea>
+                        </div>
+                    </div>
+                    <div class="row" ng-if="context.nativeSettings.execCommandOnStartup">
+                        <div class="setting-key setting-key-without-desc col-sm-4">
+                            <span translate>Execute Command Options on Startup</span>
+                        </div>
+                        <div class="setting-value col-sm-8">
+                            <select class="form-control" style="width: 100%;" ng-model="context.nativeSettings.execCommandOptionsOnStartup"
+                                    ng-change="setExecCommandOptionsOnStartup(context.nativeSettings.execCommandOptionsOnStartup)">
+                                <option value="as-child-process" translate>As Child Process</option>
+                                <option value="as-detached-process" translate>As Detached Process</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="setting-key setting-key-without-desc col-sm-4">
                             <span translate>Action After Main Window Closed</span>
                         </div>
                         <div class="setting-value col-sm-8">
@@ -276,7 +432,7 @@
                     </div>
                     <div class="row">
                         <div class="setting-key setting-key-without-desc col-sm-4">
-                            <span translate>Import / Export AriaNg Settings</span>
+                            <span translate>Import / Export AriaNg Native Settings</span>
                         </div>
                         <div class="setting-value col-sm-8">
                             <button class="btn btn-sm btn-default" ng-click="showImportSettingsModal()">
@@ -363,6 +519,17 @@
                             </select>
                         </div>
                     </div>
+                    <div class="row" ng-if="setting.protocol === 'http' || setting.protocol === 'https'">
+                        <div class="setting-key setting-key-without-desc col-sm-4">
+                            <span translate>Aria2 RPC Request Headers</span>
+                            <span class="asterisk">*</span>
+                        </div>
+                        <div class="setting-value col-sm-8">
+                            <textarea class="form-control" style="width: 100%;" rows="4" ng-model="setting.rpcRequestHeaders"
+                                      ng-change="updateRpcSetting(setting, 'rpcRequestHeaders')"
+                                      ng-placeholder="'Support multiple request headers, one header per line, each line containing &quot;header name: header value&quot;.' | translate"></textarea>
+                        </div>
+                    </div>
                     <div class="row">
                         <div class="setting-key setting-key-without-desc col-sm-4">
                             <span translate>Aria2 RPC Secret Token</span>
@@ -378,6 +545,16 @@
                                     </button>
                                 </span>
                             </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="setting-key setting-key-without-desc col-sm-4">
+                            <span translate>Export Command API</span>
+                        </div>
+                        <div class="setting-value col-sm-8">
+                            <button class="btn btn-sm btn-default" ng-click="showExportCommandAPIModal(setting)">
+                                <span translate>Export</span>
+                            </button>
                         </div>
                     </div>
                     <div class="row tip no-background no-hover">
@@ -410,7 +587,7 @@
                     <div class="settings-table striped">
                         <input id="import-file-holder" type="file" style="display: none"/>
                         <textarea class="form-control" ng-model="context.importSettings" rows="20"
-                                  ng-placeholder="'AriaNg settings data' | translate"></textarea>
+                                  ng-placeholder="'AriaNg Native settings data' | translate"></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -451,4 +628,5 @@
             </div>
         </div>
     </div>
+    <ng-export-command-api-dialog options="context.exportCommandApiOptions"></ng-export-command-api-dialog>
 </section>

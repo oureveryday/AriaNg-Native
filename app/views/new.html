@@ -21,8 +21,7 @@
                             <li><a class="pointer-cursor" ng-click="openTorrent()" translate>Open Torrent File</a></li>
                             <li><a class="pointer-cursor" ng-click="openMetalink()" translate>Open Metalink File</a></li>
                         </ul>
-                    </div>
-                    <div class="btn-group">
+                    </div><div class="btn-group">
                         <button type="submit" class="btn btn-sm"
                                 ng-class="{'btn-default': !isNewTaskValid(), 'btn-success': isNewTaskValid()}"
                                 ng-disabled="!isNewTaskValid()" translate>Download Now
@@ -34,6 +33,8 @@
                         </button>
                         <ul class="dropdown-menu right-align">
                             <li><a class="pointer-cursor" ng-click="startDownload(true)" translate>Download Later</a></li>
+                            <li ng-if="context.taskType === 'urls'" class="divider"></li>
+                            <li ng-if="context.taskType === 'urls'"><a class="pointer-cursor" ng-click="showExportCommandAPIModal()" translate>Export Command API</a></li>
                         </ul>
                     </div>
                 </li>
@@ -207,16 +208,13 @@
                         <div class="settings-table-title new-task-filter-title">
                             <div class="row">
                                 <div class="col-sm-12">
-                                    <span translate>Filters</span><span>:&nbsp;</span>
-                                    <div class="checkbox checkbox-inline checkbox-primary">
+                                    <span translate>Filters</span><span>:&nbsp;</span><div class="checkbox checkbox-inline checkbox-primary">
                                         <input id="optionFilterGlobal" type="checkbox" ng-model="context.optionFilter['global']"/>
                                         <label for="optionFilterGlobal" translate>Global</label>
-                                    </div>
-                                    <div class="checkbox checkbox-inline checkbox-primary">
+                                    </div><div class="checkbox checkbox-inline checkbox-primary">
                                         <input id="optionFilterHttp" type="checkbox" ng-model="context.optionFilter['http']"/>
                                         <label for="optionFilterHttp" translate>Http</label>
-                                    </div>
-                                    <div class="checkbox checkbox-inline checkbox-primary">
+                                    </div><div class="checkbox checkbox-inline checkbox-primary">
                                         <input id="optionFilterBittorrent" type="checkbox" ng-model="context.optionFilter['bittorrent']"/>
                                         <label for="optionFilterBittorrent" translate>BitTorrent</label>
                                     </div>
@@ -306,5 +304,6 @@
                 </div>
             </div>
         </div>
+        <ng-export-command-api-dialog options="context.exportCommandApiOptions"></ng-export-command-api-dialog>
     </form>
 </section>

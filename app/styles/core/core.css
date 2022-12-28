@@ -39,6 +39,10 @@ td {
     vertical-align: middle !important;
 }
 
+.modal textarea {
+    resize: none;
+}
+
 .blur {
     -webkit-filter: blur(5px);
     -moz-filter: blur(5px);
@@ -303,4 +307,13 @@ td {
 }
 .fade-in.ng-enter.ng-enter-active {
     opacity:1;
+}
+
+/* misc */
+.keyboard-key {
+    font-size: 0.85em;
+    padding: 1px 3px;
+    -webkit-border-radius: 2px;
+    -moz-border-radius: 2px;
+    border-radius: 2px;
 }

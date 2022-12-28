@@ -25,6 +25,18 @@ const userSettingsSchema = {
     },
     pos_y: {
         type: 'number'
+    },
+    execCommandOnStartup: {
+        type: 'string'
+    },
+    execCommandArgumentsOnStartup: {
+        type: 'string'
+    },
+    execDetachedCommandOnStartup: {
+        type: 'boolean'
+    },
+    lastCheckUpdatesTime: {
+        type: 'number'
     }
 };
 
@@ -39,8 +51,12 @@ let config = {
     maximized: !!userSettingsStore.get('maximized'),
     defaultPosition: userSettingsStore.get('defaultPosition') || 'last-position',
     minimizedToTray: userSettingsStore.get('minimizedToTray', true),
+    execCommandOnStartup: userSettingsStore.get('execCommandOnStartup'),
+    execCommandArgumentsOnStartup: userSettingsStore.get('execCommandArgumentsOnStartup'),
+    execDetachedCommandOnStartup: userSettingsStore.get('execDetachedCommandOnStartup', false),
+    lastCheckUpdatesTime: userSettingsStore.get('lastCheckUpdatesTime') || 0,
     save: function (item) {
-        if (item && this[item] != undefined) {
+        if (item && this[item] !== undefined) {
             userSettingsStore.set(item, this[item]);
         }
     }

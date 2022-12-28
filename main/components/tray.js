@@ -4,14 +4,14 @@ const os = require('os');
 const path = require('path');
 const electron = require('electron');
 
-const core = require('./core');
+const core = require('../core');
 
 const app = electron.app;
 const Menu = electron.Menu;
 const Tray = electron.Tray;
 
 let instance = null;
-let iconPath = path.join(__dirname, '..', 'assets', 'AriaNg.ico');
+let iconPath = path.join(__dirname, '../../', 'assets', 'AriaNg.ico');
 
 let init = function () {
     if (instance === null && os.platform() === 'win32') {

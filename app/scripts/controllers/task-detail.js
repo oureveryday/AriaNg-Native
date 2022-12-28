@@ -86,7 +86,11 @@
             }
 
             if (angular.isUndefined($scope.nativeContext.directoryExists)) {
-                $scope.nativeContext.directoryExists = ariaNgNativeElectronService.isLocalFSExists(task.dir);
+                ariaNgNativeElectronService.getLocalFSExistsAsync(task.dir, function (exists) {
+                    $scope.$apply(function () {
+                        $scope.nativeContext.directoryExists = exists;
+                    });
+                });
             }
 
             if ($scope.task) {
@@ -704,7 +708,7 @@
             }
 
             var name = currentRowTriggeredMenu.find('.setting-key > span').text().trim();
-            var value = "";
+            var value = '';
 
             currentRowTriggeredMenu.find('.setting-value > span').each(function (i, element) {
                 if (i > 0) {

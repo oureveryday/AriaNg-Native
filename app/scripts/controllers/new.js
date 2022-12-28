@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    angular.module('ariaNg').controller('NewTaskController', ['$rootScope', '$scope', '$location', '$timeout', 'ariaNgFileTypes', 'ariaNgCommonService', 'ariaNgLocalizationService', 'ariaNgLogService', 'ariaNgFileService', 'ariaNgSettingService', 'aria2TaskService', 'aria2SettingService', 'ariaNgNativeElectronService', function ($rootScope, $scope, $location, $timeout, ariaNgFileTypes, ariaNgCommonService, ariaNgLocalizationService, ariaNgLogService, ariaNgFileService, ariaNgSettingService, aria2TaskService, aria2SettingService, ariaNgNativeElectronService) {
+    angular.module('ariaNg').controller('NewTaskController', ['$rootScope', '$scope', '$location', '$timeout', 'ariaNgFileTypes', 'ariaNgCommonService', 'ariaNgLogService', 'ariaNgKeyboardService', 'ariaNgFileService', 'ariaNgSettingService', 'aria2TaskService', 'aria2SettingService', 'ariaNgNativeElectronService', function ($rootScope, $scope, $location, $timeout, ariaNgFileTypes, ariaNgCommonService, ariaNgLogService, ariaNgKeyboardService, ariaNgFileService, ariaNgSettingService, aria2TaskService, aria2SettingService, ariaNgNativeElectronService) {
         var tabStatusItems = [
             {
                 name: 'links',
@@ -65,10 +65,13 @@
             return selectedFileIndex;
         };
 
-        var downloadByLinks = function (pauseOnAdded, responseCallback) {
+        var getDownloadTasksByLinks = function (options) {
             var urls = ariaNgCommonService.parseUrlsFromOriginInput($scope.context.urls);
-            var options = angular.copy($scope.context.options);
             var tasks = [];
+
+            if (!options) {
+                options = angular.copy($scope.context.options);
+            }
 
             for (var i = 0; i < urls.length; i++) {
                 if (urls[i] === '' || urls[i].trim() === '') {
@@ -80,6 +83,13 @@
                     options: options
                 });
             }
+
+            return tasks;
+        };
+
+        var downloadByLinks = function (pauseOnAdded, responseCallback) {
+            var options = angular.copy($scope.context.options);
+            var tasks = getDownloadTasksByLinks(options);
 
             saveDownloadPath(options);
 
@@ -142,13 +152,13 @@
                     ariaNgLogService.error('[NewTaskController] get file via electron error', result.exception);
 
                     if (result.exception.code === 'ENOENT') {
-                        ariaNgLocalizationService.showError('native.error.file-not-found', null, {
+                        ariaNgCommonService.showError('native.error.file-not-found', null, {
                             textParams: {
                                 filepath: result.exception.path
                             }
                         });
                     } else {
-                        ariaNgLocalizationService.showError(result.exception.code);
+                        ariaNgCommonService.showError(result.exception.code);
                     }
                 }
             });
@@ -257,7 +267,8 @@
                 global: true,
                 http: false,
                 bittorrent: false
-            }
+            },
+            exportCommandApiOptions: null
         };
 
         if (parameters.url) {
@@ -663,7 +674,7 @@
                 $scope.context.taskType = 'torrent';
                 $scope.changeTab('links');
             }, function (error) {
-                ariaNgLocalizationService.showError(error);
+                ariaNgCommonService.showError(error);
             }, angular.element('#file-holder'));
         };
 
@@ -680,7 +691,7 @@
                 $scope.context.taskType = 'metalink';
                 $scope.changeTab('options');
             }, function (error) {
-                ariaNgLocalizationService.showError(error);
+                ariaNgCommonService.showError(error);
             }, angular.element('#file-holder'));
         };
 
@@ -730,6 +741,13 @@
             }
         };
 
+        $scope.showExportCommandAPIModal = function () {
+            $scope.context.exportCommandApiOptions = {
+                type: 'new-task',
+                data: getDownloadTasksByLinks()
+            };
+        };
+
         $scope.setOption = function (key, value, optionStatus) {
             if (value !== '') {
                 $scope.context.options[key] = value;
@@ -741,10 +759,18 @@
         };
 
         $scope.urlTextboxKeyDown = function (event) {
-            var keyCode = event.keyCode || event.which || event.charCode;
+            if (!ariaNgSettingService.getKeyboardShortcuts()) {
+                return;
+            }
 
-            if (keyCode === 13 && event.ctrlKey && $scope.newTaskForm.$valid) {
+            if (ariaNgKeyboardService.isCtrlEnterPressed(event) && $scope.newTaskForm.$valid) {
+                if (event.preventDefault) {
+                    event.preventDefault();
+                }
+
                 $scope.startDownload();
+
+                return false;
             }
         };
 

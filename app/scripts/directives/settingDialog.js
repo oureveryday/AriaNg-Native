@@ -1,7 +1,7 @@
 (function () {
     'use strict';
 
-    angular.module('ariaNg').directive('ngSettingDialog', ['ariaNgLocalizationService', 'aria2SettingService', function (ariaNgLocalizationService, aria2SettingService) {
+    angular.module('ariaNg').directive('ngSettingDialog', ['ariaNgCommonService', 'aria2SettingService', function (ariaNgCommonService, aria2SettingService) {
         return {
             restrict: 'E',
             templateUrl: 'views/setting-dialog.html',
@@ -30,7 +30,7 @@
                     var keys = aria2SettingService.getAria2QuickSettingsAvailableOptions(type);
 
                     if (!keys) {
-                        ariaNgLocalizationService.showError('Type is illegal!');
+                        ariaNgCommonService.showError('Type is illegal!');
                         return;
                     }
 
@@ -49,10 +49,12 @@
                     });
                 };
 
-                angular.element('#quickSettingModal').on('hidden.bs.modal', function () {
-                    scope.setting = null;
-                    scope.context.availableOptions = [];
-                    scope.context.globalOptions = [];
+                angular.element(element).on('hidden.bs.modal', function () {
+                    scope.$apply(function () {
+                        scope.setting = null;
+                        scope.context.availableOptions = [];
+                        scope.context.globalOptions = [];
+                    });
                 });
 
                 scope.$watch('setting', function (setting) {
@@ -60,7 +62,7 @@
                         loadOptions(setting.type);
                         loadAria2OptionsValue();
 
-                        angular.element('#quickSettingModal').modal('show');
+                        angular.element(element).modal('show');
                     }
                 }, true);
             }

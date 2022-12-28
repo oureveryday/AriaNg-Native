@@ -1,96 +1,145 @@
 (function () {
     'use strict';
 
-    angular.module('ariaNg').factory('ariaNgNativeElectronService', ['ariaNgLogService', 'ariaNgLocalizationService', function (ariaNgLogService, ariaNgLocalizationService) {
+    angular.module('ariaNg').factory('ariaNgNativeElectronService', ['$q', 'ariaNgLogService', 'ariaNgLocalizationService', function ($q, ariaNgLogService, ariaNgLocalizationService) {
         var electron = angular.isFunction(window.nodeRequire) ? nodeRequire('electron') : {};
-        var remote = electron.remote || {
-            require: function () {
-                return {};
-            }
-        };
         var ipcRenderer = electron.ipcRenderer || {};
-        var shell = electron.shell || {};
-        var config = remote.require('./config') || {};
-        var menu = remote.require('./menu') || {};
-        var tray = remote.require('./tray') || {};
-        var localfs = remote.require('./localfs') || {};
-        var bittorrent = remote.require('./bittorrent') || {};
 
-        var getSetting = function (item) {
-            if (!remote || !remote.getGlobal) {
-                return null;
-            }
-
-            var settings = remote.getGlobal('settings');
-
-            if (!settings) {
-                return null;
-            }
-
-            return settings[item];
-        };
-
-        var getCurrentWindow = function () {
-            if (!remote || !remote.getCurrentWindow) {
-                return {};
-            }
-
-            return remote.getCurrentWindow();
-        };
-
-        var onMainWindowEvent = function (event, callback) {
-            getCurrentWindow().on && getCurrentWindow().on(event, callback);
-        };
-
-        var onMainProcessMessage = function (channel, callback) {
+        var onMainProcessEvent = function (channel, callback) {
             ipcRenderer.on && ipcRenderer.on(channel, callback);
         };
 
-        var removeMainProcessCallback = function (channel, callback) {
+        var removeMainProcessEvent = function (channel, callback) {
             ipcRenderer.removeListener && ipcRenderer.removeListener(channel, callback);
         };
 
-        var sendMessageToMainProcess = function (channel, message) {
-            ipcRenderer.send && ipcRenderer.send(channel, message);
+        var invokeMainProcessMethod = function (channel, ...args) {
+            ipcRenderer.send && ipcRenderer.send(channel, ...args);
         };
+
+        var invokeMainProcessMethodSync = function (channel, ...args) {
+            if (!ipcRenderer.sendSync) {
+                return null;
+            }
+
+            return ipcRenderer.sendSync(channel, ...args);
+        };
+
+        var invokeMainProcessMethodAsync = function (channel, ...args) {
+            if (!ipcRenderer.invoke) {
+                return null;
+            }
+
+            return ipcRenderer.invoke(channel, ...args);
+        };
+
+        onMainProcessEvent('on-main-log-debug', function (event, msg, obj) {
+            ariaNgLogService.debug(msg, obj);
+        });
+
+        onMainProcessEvent('on-main-log-info', function (event, msg, obj) {
+            ariaNgLogService.info(msg, obj);
+        });
+
+        onMainProcessEvent('on-main-log-warn', function (event, msg, obj) {
+            ariaNgLogService.warn(msg, obj);
+        });
+
+        onMainProcessEvent('on-main-log-error', function (event, msg, obj) {
+            ariaNgLogService.error(msg, obj);
+        });
+
+        invokeMainProcessMethod('on-render-electron-service-inited');
 
         return {
             getRuntimeEnvironment: function () {
-                if (!remote.process || !remote.process.versions) {
-                    return null;
-                }
-
-                var versions = remote.process.versions;
-                var items = [];
-
-                items.push({name: 'Electron', value: versions.electron});
-                items.push({name: 'Node.js', value: versions.node});
-                items.push({name: 'Chrome', value: versions.chrome});
-                items.push({name: 'V8', value: versions.v8});
-
-                return items;
+                return invokeMainProcessMethodSync('render-sync-get-runtime-environment');
             },
             getVersion: function() {
-                return getSetting('version');
+                return invokeMainProcessMethodSync('render-sync-get-global-setting', 'version');
             },
             getAriaNgVersion: function() {
-                return getSetting('ariaNgVersion');
+                return invokeMainProcessMethodSync('render-sync-get-global-setting', 'ariaNgVersion');
+            },
+            getBuildCommit: function () {
+                return invokeMainProcessMethodSync('render-sync-get-global-setting', 'buildCommit');
             },
             isDevMode: function () {
-                return !!getSetting('isDevMode');
+                return invokeMainProcessMethodSync('render-sync-get-global-setting', 'isDevMode');
             },
             useCustomAppTitle: function () {
-                return !!getSetting('useCustomAppTitle');
+                return invokeMainProcessMethodSync('render-sync-get-global-setting', 'useCustomAppTitle');
+            },
+            setNativeTheme: function (theme) {
+                invokeMainProcessMethod('render-set-native-theme', theme);
+            },
+            getWindowMaximizedAsync: function (callback) {
+                return invokeMainProcessMethodAsync('render-get-native-window-maximized')
+                    .then(function onReceive(maximized) {
+                        if (callback) {
+                            callback(maximized);
+                        }
+                    });
+            },
+            minimizeWindow: function () {
+                invokeMainProcessMethod('render-minimize-native-window');
+            },
+            maximizeOrRestoreWindow: function () {
+                invokeMainProcessMethod('render-maximize-or-restore-native-window');
+            },
+            reload: function () {
+                invokeMainProcessMethod('render-reload-native-window');
+            },
+            exitApp: function () {
+                invokeMainProcessMethod('render-exit-native-app');
+            },
+            showTextboxContextMenu: function (context) {
+                invokeMainProcessMethod('render-show-textbox-context-menu', context);
+            },
+            showSystemNotification: function (context) {
+                invokeMainProcessMethod('render-show-system-notification', context);
+            },
+            setApplicationMenu: function () {
+                invokeMainProcessMethod('render-update-app-menu-label', {
+                    AboutAriaNgNative: ariaNgLocalizationService.getLocalizedText('menu.AboutAriaNgNative'),
+                    Services: ariaNgLocalizationService.getLocalizedText('menu.Services'),
+                    HideAriaNgNative: ariaNgLocalizationService.getLocalizedText('menu.HideAriaNgNative'),
+                    HideOthers: ariaNgLocalizationService.getLocalizedText('menu.HideOthers'),
+                    ShowAll: ariaNgLocalizationService.getLocalizedText('menu.ShowAll'),
+                    QuitAriaNgNative: ariaNgLocalizationService.getLocalizedText('menu.QuitAriaNgNative'),
+                    Edit: ariaNgLocalizationService.getLocalizedText('menu.Edit'),
+                    Undo: ariaNgLocalizationService.getLocalizedText('menu.Undo'),
+                    Redo: ariaNgLocalizationService.getLocalizedText('menu.Redo'),
+                    Cut: ariaNgLocalizationService.getLocalizedText('menu.Cut'),
+                    Copy: ariaNgLocalizationService.getLocalizedText('menu.Copy'),
+                    Paste: ariaNgLocalizationService.getLocalizedText('menu.Paste'),
+                    Delete: ariaNgLocalizationService.getLocalizedText('menu.Delete'),
+                    SelectAll: ariaNgLocalizationService.getLocalizedText('menu.SelectAll'),
+                    Window: ariaNgLocalizationService.getLocalizedText('menu.Window'),
+                    Minimize: ariaNgLocalizationService.getLocalizedText('menu.Minimize'),
+                    Zoom: ariaNgLocalizationService.getLocalizedText('menu.Zoom'),
+                    BringAllToFront: ariaNgLocalizationService.getLocalizedText('menu.BringAllToFront')
+                });
+            },
+            setTrayMenu: function () {
+                invokeMainProcessMethod('render-update-tray-menu-label', {
+                    ShowAriaNgNative: ariaNgLocalizationService.getLocalizedText('tray.ShowAriaNgNative'),
+                    Exit: ariaNgLocalizationService.getLocalizedText('tray.Exit')
+                });
+            },
+            setTrayToolTip: function (value) {
+                invokeMainProcessMethod('render-update-tray-tip', value);
+            },
+            setMainWindowLanguage: function () {
+                this.setApplicationMenu();
+                this.setTrayMenu();
             },
             getNativeConfig: function () {
+                var config = invokeMainProcessMethodSync('render-sync-get-native-config');
                 var cfg = {};
 
                 for (var key in config) {
                     if (!config.hasOwnProperty(key)) {
-                        continue;
-                    }
-
-                    if (angular.isFunction(config[key])) {
                         continue;
                     }
 
@@ -100,138 +149,215 @@
                 return cfg;
             },
             setDefaultPosition: function (value) {
-                config.defaultPosition = value;
-                config.save('defaultPosition');
+                invokeMainProcessMethod('render-set-native-config-default-position', value);
             },
             setMinimizedToTray: function (value) {
-                config.minimizedToTray = !!value;
-                config.save('minimizedToTray');
+                invokeMainProcessMethod('render-set-native-config-minimized-to-tray', value);
             },
-            setMainWindowLanguage: function () {
-                this.setApplicationMenu();
-                this.setTrayMenu();
+            setExecCommandOnStartup: function (value) {
+                invokeMainProcessMethod('render-set-native-config-exec-command-on-startup', value);
             },
-            isLocalFSExists: function (fullpath) {
-                return localfs.isExists(fullpath);
+            setExecCommandArgumentsOnStartup: function (value) {
+                invokeMainProcessMethod('render-set-native-config-exec-command-arguments-on-startup', value);
+            },
+            setExecDetachedCommandOnStartup: function (value) {
+                invokeMainProcessMethod('render-set-native-config-exec-detached-command-on-startup', value);
+            },
+            getLastCheckUpdatesTimeAsync: function (callback) {
+                return invokeMainProcessMethodAsync('render-get-native-config-last-check-updates-time')
+                    .then(function onReceive(lastCheckUpdatesTime) {
+                        if (callback) {
+                            callback(lastCheckUpdatesTime);
+                        }
+                    });
+            },
+            setLastCheckUpdatesTime: function (value) {
+                invokeMainProcessMethod('render-set-native-config-last-check-updates-time', value);
+            },
+            getStartupCommandOutputAsync: function () {
+                return invokeMainProcessMethodAsync('render-get-startup-command-process-output');
+            },
+            requestHttp: function (requestContext) {
+                var deferred = $q.defer();
+
+                invokeMainProcessMethodAsync('render-request-http', requestContext)
+                    .then(function onReceive(result) {
+                        if (result && result.success) {
+                            deferred.resolve(result.response);
+                        } else {
+                            deferred.reject(result.response);
+                        }
+                    }).catch(function onError() {
+                        deferred.reject({});
+                    });
+
+                return deferred.promise;
+            },
+            createWebSocketClient: function (rpcUrl, options) {
+                var WebSocketClient = function (rpcUrl, options) {
+                    var openCallback = null;
+                    var closeCallback = null;
+                    var messageCallback = null;
+
+                    Object.defineProperty(WebSocketClient.prototype, 'readyState', {
+                        get: function get() {
+                            return invokeMainProcessMethodSync('render-get-websocket-readystate');
+                        },
+                        set: function set() {
+                            throw new Error('The \"readyState\" property is readonly.');
+                        }
+                    });
+
+                    this.send = function (request) {
+                        invokeMainProcessMethod('render-send-websocket-message', {
+                            url: rpcUrl,
+                            data: request
+                        });
+                    };
+
+                    this.reconnect = function () {
+                        invokeMainProcessMethod('render-reconnect-websocket', rpcUrl, options);
+                    };
+
+                    this.onOpen = function (callback) {
+                        openCallback = callback;
+                    };
+
+                    this.onClose = function (callback) {
+                        closeCallback = callback;
+                    };
+
+                    this.onMessage = function (callback) {
+                        messageCallback = callback;
+                    };
+
+                    onMainProcessEvent('on-main-websocket-open', function (event, e) {
+                        if (e.url !== rpcUrl) {
+                            ariaNgLogService.debug('[ariaNgNativeElectronService.websocket.onOpen] event dropped, because rpc url not equals, excepted url: ' + rpcUrl + ", actual url: " + e.url);
+                            return;
+                        }
+
+                        if (angular.isFunction(openCallback)) {
+                            openCallback(e);
+                        }
+                    });
+
+                    onMainProcessEvent('on-main-websocket-close', function (event, e) {
+                        if (e.url !== rpcUrl) {
+                            ariaNgLogService.debug('[ariaNgNativeElectronService.websocket.onClose] event dropped, because rpc url not equals, excepted url: ' + rpcUrl + ", actual url: " + e.url);
+                            return;
+                        }
+
+                        if (angular.isFunction(closeCallback)) {
+                            closeCallback(e);
+                        }
+                    });
+
+                    onMainProcessEvent('on-main-websocket-message', function (event, message) {
+                        if (message.url !== rpcUrl) {
+                            ariaNgLogService.debug('[ariaNgNativeElectronService.websocket.onMessage] event dropped, because rpc url not equals, excepted url: ' + rpcUrl + ", actual url: " + message.url, message.data);
+                            return;
+                        }
+
+                        if (angular.isFunction(messageCallback)) {
+                            messageCallback(message);
+                        }
+                    });
+
+                    invokeMainProcessMethod('render-connect-websocket', rpcUrl, options);
+                };
+
+                return new WebSocketClient(rpcUrl, options);
+            },
+            openProjectLink: function () {
+                invokeMainProcessMethod('render-open-external-url', 'https://github.com/mayswind/AriaNg-Native');
+            },
+            openProjectReleaseLink: function () {
+                invokeMainProcessMethod('render-open-external-url', 'https://github.com/mayswind/AriaNg-Native/releases');
             },
             readPackageFile: function (path) {
-                return localfs.readPackageFile(path);
+                return invokeMainProcessMethodSync('render-sync-get-package-file-content', path);
             },
-            parseBittorrentInfo: function (path) {
-                var info = angular.copy(bittorrent.parseBittorrentInfo(path));
-                info.type = 'bittorrent';
+            getLocalFSFileBufferAsync: function (fullpath, callback) {
+                return invokeMainProcessMethodAsync('render-get-localfs-file-buffer', fullpath)
+                    .then(function onReceive(buffer) {
+                        if (callback) {
+                            callback(buffer);
+                        }
+                    });
+            },
+            getLocalFSExistsAsync: function (fullpath, callback) {
+                return invokeMainProcessMethodAsync('render-get-localfs-exists', fullpath)
+                    .then(function onReceive(exists) {
+                        if (callback) {
+                            callback(exists);
+                        }
+                    });
+            },
+            openFileInDirectory: function (dir, filename) {
+                invokeMainProcessMethod('render-open-local-directory', dir, filename);
+            },
+            showOpenFileDialogAsync: function (filters, callback) {
+                return invokeMainProcessMethodAsync('render-show-open-file-dialog', filters)
+                    .then(function onReceive(result) {
+                        if (callback) {
+                            callback({
+                                canceled: result.canceled,
+                                filePaths: result.filePaths
+                            });
+                        }
+                    });
+            },
+            showDevTools: function () {
+                invokeMainProcessMethod('render-show-dev-tools');
+            },
+            parseBittorrentInfo: function (data) {
+                var info = angular.copy(invokeMainProcessMethodSync('render-sync-parse-bittorrent-info', data));
 
-                ariaNgLogService.debug('[ariaNgNativeElectronService.parseBittorrentInfo] bittorrent info', info);
+                if (info) {
+                    info.type = 'bittorrent';
+                    ariaNgLogService.debug('[ariaNgNativeElectronService.parseBittorrentInfo] bittorrent info', info);
+                } else {
+                    ariaNgLogService.debug('[ariaNgNativeElectronService.parseBittorrentInfo] cannot parse bittorrent info', info);
+                }
 
                 return info;
             },
-            openProjectLink: function () {
-                return shell.openExternal && shell.openExternal('https://github.com/mayswind/AriaNg-Native');
+            notifyMainProcessViewLoaded: function (locationPath) {
+                invokeMainProcessMethod('on-render-view-content-loaded', locationPath);
             },
-            openProjectReleaseLink: function () {
-                return shell.openExternal && shell.openExternal('https://github.com/mayswind/AriaNg-Native/releases');
+            notifyMainProcessorNewDropFile: function (message) {
+                invokeMainProcessMethod('on-render-new-drop-file', message);
             },
-            openFileInDirectory: function (dir, filename) {
-                var fullpath = localfs.getFullPath(dir, filename);
-
-                if (localfs.isExists(fullpath)) {
-                    return shell.showItemInFolder && shell.showItemInFolder(fullpath);
-                } else {
-                    return shell.openItem && shell.openItem(dir);
-                }
+            notifyMainProcessorNewDropText: function (message) {
+                invokeMainProcessMethod('on-render-new-drop-text', message);
             },
             onMainWindowMaximize: function (callback) {
-                onMainWindowEvent('maximize', callback);
+                onMainProcessEvent('on-main-window-maximized', callback);
             },
             onMainWindowUnmaximize: function (callback) {
-                onMainWindowEvent('unmaximize', callback);
+                onMainProcessEvent('on-main-window-unmaximized', callback);
             },
-            onMainProcessNavigateTo: function (callback) {
-                onMainProcessMessage('navigate-to', callback);
+            onMainProcessChangeDevMode: function (callback) {
+                onMainProcessEvent('on-main-change-dev-mode', callback);
             },
             onMainProcessShowError: function (callback) {
-                onMainProcessMessage('show-error', callback);
+                onMainProcessEvent('on-main-show-error', callback);
+            },
+            onMainProcessNavigateTo: function (callback) {
+                onMainProcessEvent('on-main-navigate-to', callback);
             },
             onMainProcessNewTaskFromFile: function (callback) {
-                onMainProcessMessage('new-task-from-file', callback);
+                onMainProcessEvent('on-main-new-task-from-file', callback);
             },
             onMainProcessNewTaskFromText: function (callback) {
-                onMainProcessMessage('new-task-from-text', callback);
+                onMainProcessEvent('on-main-new-task-from-text', callback);
             },
             removeMainProcessNewTaskFromFileCallback: function (callback) {
-                removeMainProcessCallback('new-task-from-file', callback);
+                removeMainProcessEvent('on-main-new-task-from-file', callback);
             },
             removeMainProcessNewTaskFromTextCallback: function (callback) {
-                removeMainProcessCallback('new-task-from-text',  callback);
-            },
-            sendViewLoadedMessageToMainProcess: function (message) {
-                sendMessageToMainProcess('view-content-loaded', message);
-            },
-            sendNewDropFileMessageToMainProcess: function (message) {
-                sendMessageToMainProcess('new-drop-file', message);
-            },
-            sendNewDropTextMessageToMainProcess: function (message) {
-                sendMessageToMainProcess('new-drop-text', message);
-            },
-            setApplicationMenu: function () {
-                if (menu.setApplicationMenu) {
-                    menu.setApplicationMenu({
-                        labels: {
-                            AboutAriaNgNative: ariaNgLocalizationService.getLocalizedText('menu.AboutAriaNgNative'),
-                            Services: ariaNgLocalizationService.getLocalizedText('menu.Services'),
-                            HideAriaNgNative: ariaNgLocalizationService.getLocalizedText('menu.HideAriaNgNative'),
-                            HideOthers: ariaNgLocalizationService.getLocalizedText('menu.HideOthers'),
-                            ShowAll: ariaNgLocalizationService.getLocalizedText('menu.ShowAll'),
-                            QuitAriaNgNative: ariaNgLocalizationService.getLocalizedText('menu.QuitAriaNgNative'),
-                            Edit: ariaNgLocalizationService.getLocalizedText('menu.Edit'),
-                            Undo: ariaNgLocalizationService.getLocalizedText('menu.Undo'),
-                            Redo: ariaNgLocalizationService.getLocalizedText('menu.Redo'),
-                            Cut: ariaNgLocalizationService.getLocalizedText('menu.Cut'),
-                            Copy: ariaNgLocalizationService.getLocalizedText('menu.Copy'),
-                            Paste: ariaNgLocalizationService.getLocalizedText('menu.Paste'),
-                            Delete: ariaNgLocalizationService.getLocalizedText('menu.Delete'),
-                            SelectAll: ariaNgLocalizationService.getLocalizedText('menu.SelectAll'),
-                            Window: ariaNgLocalizationService.getLocalizedText('menu.Window'),
-                            Minimize: ariaNgLocalizationService.getLocalizedText('menu.Minimize'),
-                            Zoom: ariaNgLocalizationService.getLocalizedText('menu.Zoom'),
-                            BringAllToFront: ariaNgLocalizationService.getLocalizedText('menu.BringAllToFront')
-                        }
-                    });
-                }
-            },
-            setTrayMenu: function () {
-                if (tray.setContextMenu) {
-                    tray.setContextMenu({
-                        labels: {
-                            ShowAriaNgNative: ariaNgLocalizationService.getLocalizedText('tray.ShowAriaNgNative'),
-                            Exit: ariaNgLocalizationService.getLocalizedText('tray.Exit')
-                        }
-                    });
-                }
-            },
-            setTrayToolTip: function (value) {
-                if (tray.setToolTip) {
-                    tray.setToolTip(value);
-                }
-            },
-            reload: function () {
-                getCurrentWindow().reload && getCurrentWindow().reload();
-            },
-            isMaximized: function () {
-                return getCurrentWindow().isMaximized && getCurrentWindow().isMaximized();
-            },
-            minimizeWindow: function () {
-                getCurrentWindow().minimize && getCurrentWindow().minimize();
-            },
-            maximizeOrRestoreWindow: function () {
-                if (!this.isMaximized()) {
-                    getCurrentWindow().maximize && getCurrentWindow().maximize();
-                } else {
-                    getCurrentWindow().unmaximize && getCurrentWindow().unmaximize();
-                }
-            },
-            exitApp: function () {
-                getCurrentWindow().close && getCurrentWindow().close();
+                removeMainProcessEvent('on-main-new-task-from-text',  callback);
             }
         };
     }]);

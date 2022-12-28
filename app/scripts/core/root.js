@@ -1,8 +1,12 @@
 (function () {
     'use strict';
 
-    angular.module('ariaNg').run(['$window', '$rootScope', '$location', '$document', 'ariaNgCommonService', 'ariaNgLocalizationService', 'ariaNgLogService', 'ariaNgSettingService', 'aria2TaskService', 'ariaNgNativeElectronService', function ($window, $rootScope, $location, $document, ariaNgCommonService, ariaNgLocalizationService, ariaNgLogService, ariaNgSettingService, aria2TaskService, ariaNgNativeElectronService) {
+    angular.module('ariaNg').run(['$window', '$rootScope', '$location', '$document', '$timeout', 'ariaNgSupportedAudioFileTypes', 'ariaNgCommonService', 'ariaNgKeyboardService', 'ariaNgNotificationService', 'ariaNgLogService', 'ariaNgLocalizationService', 'ariaNgSettingService', 'aria2TaskService', 'ariaNgNativeElectronService', 'ariaNgVersionService', function ($window, $rootScope, $location, $document, $timeout, ariaNgSupportedAudioFileTypes, ariaNgCommonService, ariaNgKeyboardService, ariaNgNotificationService, ariaNgLogService, ariaNgLocalizationService, ariaNgSettingService, aria2TaskService, ariaNgNativeElectronService, ariaNgVersionService) {
         var autoRefreshAfterPageLoad = false;
+
+        var isAnyTextboxOrTextareaFocus = function () {
+            return angular.element('input[type="text"],textarea').is(':focus');
+        };
 
         var isUrlMatchUrl2 = function (url, url2) {
             if (url === url2) {
@@ -53,10 +57,13 @@
 
         var initTheme = function () {
             if (ariaNgSettingService.getTheme() === 'system') {
+                ariaNgNativeElectronService.setNativeTheme('system');
                 setThemeBySystemSettings();
             } else if (ariaNgSettingService.getTheme() === 'dark') {
+                ariaNgNativeElectronService.setNativeTheme('dark');
                 setDarkTheme();
             } else {
+                ariaNgNativeElectronService.setNativeTheme('light');
                 setLightTheme();
             }
         };
@@ -77,7 +84,7 @@
                 angular.element('.main-sidebar').addClass('blur');
                 angular.element('.navbar').addClass('blur');
                 angular.element('.content-body').addClass('blur');
-                ariaNgLocalizationService.notifyInPage('', 'You cannot use AriaNg because this browser does not meet the minimum requirements for data storage.', {
+                ariaNgNotificationService.notifyInPage('', 'You cannot use AriaNg because this browser does not meet the minimum requirements for data storage.', {
                     type: 'error',
                     delay: false
                 });
@@ -141,7 +148,7 @@
                 if (e.dataTransfer.items && e.dataTransfer.items[0] && e.dataTransfer.items[0].kind === 'file') {
                     return e.dataTransfer.items[0].getAsFile();
                 } else if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                    return  e.dataTransfer.files[0];
+                    return e.dataTransfer.files[0];
                 } else {
                     return null;
                 }
@@ -159,6 +166,7 @@
             var dropzoneFileZone = angular.element('#dropzone-filezone');
 
             angular.element($window).on('dragenter', function (e) {
+                ariaNgCommonService.closeAllDialogs();
                 dropzone.show();
                 e.preventDefault();
             });
@@ -172,7 +180,7 @@
                 var file = getDropFile(e.originalEvent);
 
                 if (file) {
-                    ariaNgNativeElectronService.sendNewDropFileMessageToMainProcess({
+                    ariaNgNativeElectronService.notifyMainProcessorNewDropFile({
                         filePath: file.path,
                         location: $location.url()
                     });
@@ -182,7 +190,7 @@
                 var text = getDropText(e.originalEvent);
 
                 if (text) {
-                    ariaNgNativeElectronService.sendNewDropTextMessageToMainProcess({
+                    ariaNgNativeElectronService.notifyMainProcessorNewDropText({
                         text: text,
                         location: $location.url()
                     });
@@ -202,10 +210,59 @@
             return angular.element('body').hasClass('sidebar-open');
         };
 
+        var toggleMaximizeButton = function () {
+            angular.element('#native-title-maximize-icon').addClass('fa-window-maximize').removeClass('fa-window-restore');
+            angular.element('#native-title-maximize-btn').attr('title', ariaNgLocalizationService.getLocalizedText('Maximize'));
+        };
+
+        var toggleRestoreButton = function () {
+            angular.element('#native-title-maximize-icon').addClass('fa-window-restore').removeClass('fa-window-maximize');
+            angular.element('#native-title-maximize-btn').attr('title', ariaNgLocalizationService.getLocalizedText('Restore Down'));
+        };
+
+        var autoCheckUpdates = function () {
+            ariaNgVersionService.getTheLatestVersion()
+                .then(function onSuccess(response) {
+                    ariaNgLogService.debug('[root.autoCheckUpdates] latest version info', response);
+
+                    if (!response || !response.data || !response.data.tag_name) {
+                        return;
+                    }
+
+                    var latestVersion = response.data.tag_name;
+
+                    if (ariaNgVersionService.compareVersion(ariaNgVersionService.getBuildVersionNumber(), latestVersion) < 0) {
+                        ariaNgNotificationService.notifyViaBrowser('AriaNg Native Updates', 'A new version has been released', {
+                            contentParams: {
+                                version: latestVersion
+                            }
+                        });
+                    }
+                }).catch(function onError(response) {
+                    ariaNgLogService.error('[root.autoCheckUpdates] failed to get latest version', response);
+                });
+        };
+
+        var playSoundAfterDownloadFinished = function () {
+            if (!ariaNgSettingService.getPlaySoundAfterDownloadFinished()) {
+                return;
+            }
+
+            if ($rootScope.soundContext.isPlaying()) {
+                ariaNgLogService.debug('[root.playSoundAfterDownloadFinished] background audio is already playing');
+                return;
+            }
+
+            $rootScope.soundContext.playSound(ariaNgSettingService.getPlaySoundAfterDownloadFinished(), true);
+        };
+
         $rootScope.currentTheme = 'light';
 
         $rootScope.searchContext = {
-            text: ''
+            text: '',
+            setSearchBoxFocused: function () {
+                angular.element('#search-box').focus();
+            }
         };
 
         $rootScope.taskContext = {
@@ -402,6 +459,85 @@
             }
         };
 
+        $rootScope.soundContext = {
+            currentSoundFile: '',
+            loadSoundFile: function (filePath, callback, silent) {
+                var player = angular.element('#background-audio')[0];
+
+                if (filePath) {
+                    ariaNgNativeElectronService.getLocalFSFileBufferAsync(filePath, function (buffer) {
+                        if (buffer) {
+                            var soundExtension = ariaNgCommonService.getFileExtension(filePath);
+                            var mimeType = ariaNgSupportedAudioFileTypes[soundExtension];
+                            var blob = new Blob([buffer], { type: mimeType });
+                            player.src = URL.createObjectURL(blob);
+                            $rootScope.soundContext.currentSoundFile = filePath;
+                            ariaNgLogService.debug('[root.soundContext.loadSoundFile] background audio is set to ' + filePath);
+
+                            if (angular.isFunction(callback)) {
+                                callback(filePath);
+                            }
+                        } else {
+                            player.src = '';
+                            $rootScope.soundContext.currentSoundFile = '';
+                            ariaNgLogService.warn('[root.soundContext.loadSoundFile] background audio is set to empty due to the file buffer is null');
+
+                            if (!silent) {
+                                ariaNgCommonService.showError('Sound file not exists.');
+                            }
+                        }
+                    });
+                } else {
+                    player.src = '';
+                    $rootScope.soundContext.currentSoundFile = '';
+                    ariaNgLogService.debug('[root.soundContext.loadSoundFile] background audio is set to empty');
+                }
+            },
+            isPlaying: function () {
+                var player = angular.element('#background-audio')[0];
+
+                return !player.paused;
+            },
+            playSound: function (filePath, silent) {
+                if (!filePath) {
+                    return;
+                }
+
+                var player = angular.element('#background-audio')[0];
+
+                player.pause();
+                player.volume = 1.0;
+
+                if (this.currentSoundFile !== filePath) {
+                    this.loadSoundFile(filePath, function () {
+                        player.currentTime = 0;
+                        player.play().catch(function (error) {
+                            ariaNgLogService.error('[root.soundContext.playSound] cannot play sound, because ' + error);
+
+                            if (!silent) {
+                                ariaNgCommonService.showError('Cannot play this sound file.');
+                            }
+                        });
+                    }, !!silent);
+                } else {
+                    player.currentTime = 0;
+                    player.play().catch(function (error) {
+                        ariaNgLogService.error('[root.soundContext.playSound] cannot play sound, because ' + error);
+
+                        if (!silent) {
+                            ariaNgCommonService.showError('Cannot play this sound file.');
+                        }
+                    });
+                }
+            },
+            stopPlayingSound: function () {
+                var player = angular.element('#background-audio')[0];
+
+                player.pause();
+                player.currentTime = 0;
+            }
+        };
+
         $rootScope.filterTask = function (task) {
             if (!task || !angular.isString(task.taskName)) {
                 return false;
@@ -416,6 +552,18 @@
 
         $rootScope.isTaskRetryable = function (task) {
             return task && task.status === 'error' && task.errorDescription && !task.bittorrent;
+        };
+
+        $rootScope.keydownActions = {
+            find: function (event) {
+                if (event.preventDefault) {
+                    event.preventDefault();
+                }
+
+                $rootScope.searchContext.setSearchBoxFocused();
+
+                return false;
+            }
         };
 
         $rootScope.swipeActions = {
@@ -456,49 +604,103 @@
 
         $rootScope.setTheme = function (theme) {
             if (theme === 'system') {
+                ariaNgNativeElectronService.setNativeTheme('system');
                 setThemeBySystemSettings();
             } else if (theme === 'dark') {
+                ariaNgNativeElectronService.setNativeTheme('dark');
                 setDarkTheme();
             } else {
+                ariaNgNativeElectronService.setNativeTheme('light');
                 setLightTheme();
             }
         };
 
-        $rootScope.nativeWindowContext = {
-            maximized: false
-        };
-
         $rootScope.useCustomAppTitle = ariaNgNativeElectronService.useCustomAppTitle();
-        $rootScope.nativeWindowContext.maximized = ariaNgNativeElectronService.isMaximized();
+
+        ariaNgNativeElectronService.getWindowMaximizedAsync(function (maximized) {
+            if (maximized) {
+                toggleRestoreButton();
+            } else {
+                toggleMaximizeButton();
+            }
+        });
+
+        $window.addEventListener('contextmenu', function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            var context = {};
+
+            if (angular.isFunction($window.getSelection)) {
+                var selection = $window.getSelection().toString();
+                context.selected = !!selection && selection.length > 0;
+            }
+
+            if (angular.element(event.target).attr('readonly') === 'readonly') {
+                context.editable = false;
+            }
+
+            if (event.target.nodeName.match(/^(input|textarea)$/i) || event.target.isContentEditable) {
+                ariaNgNativeElectronService.showTextboxContextMenu(context);
+            }
+        });
+
+        $window.addEventListener('keydown', function (event) {
+            if (!ariaNgSettingService.getKeyboardShortcuts()) {
+                return;
+            }
+
+            var isTextboxOrTextareaFocus = isAnyTextboxOrTextareaFocus();
+
+            if (ariaNgKeyboardService.isCtrlAPressed(event) && !isTextboxOrTextareaFocus) {
+                if (angular.isFunction($rootScope.keydownActions.selectAll)) {
+                    return $rootScope.keydownActions.selectAll(event);
+                }
+            } else if (ariaNgKeyboardService.isCtrlFPressed(event)) {
+                if (angular.isFunction($rootScope.keydownActions.find)) {
+                    return $rootScope.keydownActions.find(event);
+                }
+            } else if (ariaNgKeyboardService.isDeletePressed(event) && !isTextboxOrTextareaFocus) {
+                if (angular.isFunction($rootScope.keydownActions.delete)) {
+                    return $rootScope.keydownActions.delete(event);
+                }
+            } else if (ariaNgKeyboardService.isCtrlNPressed(event)) {
+                $rootScope.$apply(function () {
+                    $location.path('/new');
+                });
+            }
+        }, true);
 
         ariaNgNativeElectronService.onMainWindowMaximize(function () {
-            $rootScope.nativeWindowContext.maximized = true;
+            toggleRestoreButton();
         });
 
         ariaNgNativeElectronService.onMainWindowUnmaximize(function () {
-            $rootScope.nativeWindowContext.maximized = false;
+            toggleMaximizeButton();
         });
 
         ariaNgNativeElectronService.onMainProcessNavigateTo(function (event, routeUrl) {
-            $location.path(routeUrl);
+            angular.element('.modal.in:visible').modal('hide');
+            angular.element('.modal-backdrop').remove();
+            $rootScope.$apply(function () {
+                $location.path(routeUrl);
+            });
         });
 
         ariaNgNativeElectronService.onMainProcessShowError(function (event, message) {
-            ariaNgLocalizationService.showError(message);
+            ariaNgCommonService.showError(message);
+        });
+
+        ariaNgNativeElectronService.onMainProcessChangeDevMode(function (event, devMode) {
+            $rootScope.$apply(function () {
+                ariaNgSettingService.setDebugMode(devMode);
+            });
         });
 
         ariaNgSettingService.setDebugMode(ariaNgNativeElectronService.isDevMode());
 
-        ariaNgSettingService.onApplicationCacheUpdated(function () {
-            ariaNgLocalizationService.notifyInPage('', 'Application cache has been updated, please reload the page for the changes to take effect.', {
-                delay: false,
-                type: 'info',
-                templateUrl: 'views/notification-reloadable.html'
-            });
-        });
-
         ariaNgSettingService.onFirstAccess(function () {
-            ariaNgLocalizationService.notifyInPage('', 'Tap to configure and get started with AriaNg.', {
+            ariaNgNotificationService.notifyInPage('', 'Tap to configure and get started with AriaNg.', {
                 delay: false,
                 onClose: function () {
                     $location.path('/settings/ariang');
@@ -507,34 +709,57 @@
         });
 
         aria2TaskService.onFirstSuccess(function (event) {
-            ariaNgLocalizationService.notifyInPage('', 'is connected', {
+            ariaNgNotificationService.notifyInPage('', 'is connected', {
                 type: 'success',
                 contentPrefix: event.rpcName + ' '
             });
         });
 
         aria2TaskService.onConnectionSuccess(function () {
-            if ($rootScope.taskContext.rpcStatus !== 'Connected') {
-                $rootScope.taskContext.rpcStatus = 'Connected';
-            }
+            $timeout(function () {
+                if ($rootScope.taskContext.rpcStatus !== 'Connected') {
+                    $rootScope.taskContext.rpcStatus = 'Connected';
+                }
+            });
         });
 
         aria2TaskService.onConnectionFailed(function () {
-            if ($rootScope.taskContext.rpcStatus !== 'Disconnected') {
-                $rootScope.taskContext.rpcStatus = 'Disconnected';
-            }
+            $timeout(function () {
+                if ($rootScope.taskContext.rpcStatus !== 'Disconnected') {
+                    $rootScope.taskContext.rpcStatus = 'Disconnected';
+                }
+            });
+        });
+
+        aria2TaskService.onConnectionReconnecting(function () {
+            $timeout(function () {
+                if ($rootScope.taskContext.rpcStatus !== 'Reconnecting') {
+                    $rootScope.taskContext.rpcStatus = 'Reconnecting';
+                }
+            });
+        });
+
+        aria2TaskService.onConnectionWaitingToReconnect(function () {
+            $timeout(function () {
+                if ($rootScope.taskContext.rpcStatus !== 'Waiting to reconnect') {
+                    $rootScope.taskContext.rpcStatus = 'Waiting to reconnect';
+                }
+            });
         });
 
         aria2TaskService.onTaskCompleted(function (event) {
-            ariaNgLocalizationService.notifyTaskComplete(event.task);
+            playSoundAfterDownloadFinished(event.task);
+            ariaNgNotificationService.notifyTaskComplete(event.task);
         });
 
         aria2TaskService.onBtTaskCompleted(function (event) {
-            ariaNgLocalizationService.notifyBtTaskComplete(event.task);
+            playSoundAfterDownloadFinished(event.task);
+            ariaNgNotificationService.notifyBtTaskComplete(event.task);
         });
 
         aria2TaskService.onTaskErrorOccur(function (event) {
-            ariaNgLocalizationService.notifyTaskError(event.task);
+            playSoundAfterDownloadFinished(event.task);
+            ariaNgNotificationService.notifyTaskError(event.task);
         });
 
         $rootScope.$on('$locationChangeStart', function (event) {
@@ -542,6 +767,8 @@
 
             $rootScope.loadPromise = null;
 
+            delete $rootScope.keydownActions.selectAll;
+            delete $rootScope.keydownActions.delete;
             delete $rootScope.swipeActions.extendLeftSwipe;
             delete $rootScope.swipeActions.extendRightSwipe;
 
@@ -564,7 +791,7 @@
         });
 
         $rootScope.$on('$viewContentLoaded', function () {
-            ariaNgNativeElectronService.sendViewLoadedMessageToMainProcess($location.path());
+            ariaNgNativeElectronService.notifyMainProcessViewLoaded($location.path());
         });
 
         $rootScope.$on('$translateChangeSuccess', function(event, current, previous) {
@@ -582,6 +809,33 @@
                     } else {
                         setLightTheme();
                     }
+                }
+            });
+        }
+
+        if (ariaNgSettingService.getAutoCheckUpdates() && ariaNgSettingService.getAutoCheckUpdates() !== 'never') {
+            ariaNgNativeElectronService.getLastCheckUpdatesTimeAsync(function (lastCheckUpdatesTime) {
+                var checkFrequency = ariaNgSettingService.getAutoCheckUpdates();
+                var currentTime = parseInt(ariaNgCommonService.getCurrentUnixTime());
+                var oneDaySeconds = 86400; // s
+                var needCheckUpdates = false;
+
+                if (!angular.isNumber(lastCheckUpdatesTime)) {
+                    needCheckUpdates = true;
+                } else if (checkFrequency === 'daily' && (currentTime - lastCheckUpdatesTime) >= oneDaySeconds) {
+                    needCheckUpdates = true;
+                } else if (checkFrequency === 'weekly' && (currentTime - lastCheckUpdatesTime) >= oneDaySeconds * 7) {
+                    needCheckUpdates = true;
+                } else if (checkFrequency === 'monthly' && (currentTime - lastCheckUpdatesTime) >= oneDaySeconds * 31) {
+                    needCheckUpdates = true;
+                }
+
+                if (needCheckUpdates) {
+                    ariaNgLogService.debug('[root] need check for updates, last check time is ' + lastCheckUpdatesTime);
+                    autoCheckUpdates();
+                    ariaNgNativeElectronService.setLastCheckUpdatesTime(currentTime);
+                } else {
+                    ariaNgLogService.debug('[root] do not need check for updates, last check time is ' + lastCheckUpdatesTime);
                 }
             });
         }
