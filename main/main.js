@@ -132,9 +132,10 @@ let main = function () {
 
     app.setAppUserModelId(core.appid);
 
-    core.isDevMode = !app.isPackaged || cmd.argv.development;
+    core.isDevMode = !app.isPackaged || !!cmd.argv.development;
     core.useCustomAppTitle = os.platform() === 'win32' && !cmd.argv.classic;
 
+    const minimalWindow = !!cmd.argv.minimal;
     let filePathInCommandLine = cmd.argv.file;
 
     if (os.platform() === 'darwin') {
@@ -253,7 +254,9 @@ let main = function () {
         }
 
         core.mainWindow.once('ready-to-show', () => {
-            core.mainWindow.show();
+            if (!minimalWindow) {
+                core.mainWindow.show();
+            }
         });
 
         core.mainWindow.on('resize', () => {

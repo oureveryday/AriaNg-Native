@@ -84,6 +84,14 @@
                                             <span ng-bind="context.newTaskInfo.length | readableVolume"></span>
                                         </div>
                                     </div>
+                                    <div class="row" ng-if="context.newTaskInfo.private">
+                                        <div class="setting-key col-sm-4">
+                                            <span translate>Private Torrent</span>
+                                        </div>
+                                        <div class="setting-value col-sm-8">
+                                            <span ng-bind="(context.newTaskInfo.private ? 'True' : 'False') | translate"></span>
+                                        </div>
+                                    </div>
                                     <div class="row" ng-if="context.newTaskInfo.created">
                                         <div class="setting-key col-sm-4">
                                             <span translate>Seed Creation Time</span>
@@ -105,7 +113,22 @@
                                             <span translate>Comment</span>
                                         </div>
                                         <div class="setting-value col-sm-8">
-                                            <span ng-bind="context.newTaskInfo.comment"></span>
+                                            <span class="multi-line" ng-bind="line.replace('\r', '')"
+                                                  ng-repeat="line in context.newTaskInfo.comment.split('\n')"></span>
+                                        </div>
+                                    </div>
+                                    <div class="row" ng-if="context.newTaskInfo.announce && context.newTaskInfo.announce.length">
+                                        <div class="setting-key col-sm-4">
+                                            <span translate>BT Tracker Servers</span>
+                                            <em class="description-inline" ng-bind="'format.settings.total-count' | translate: {count: context.newTaskInfo.announce.length}"></em>
+                                            <i class="icon-expand pointer-cursor fa" ng-if="context.newTaskInfo.announce.length > 1"
+                                               ng-class="{'fa-plus': context.collapseTrackers, 'fa-minus': !context.collapseTrackers}"
+                                               ng-click="context.collapseTrackers = !context.collapseTrackers"
+                                               title="{{(context.collapseTrackers ? 'Expand' : 'Collapse') | translate}}"></i>
+                                        </div>
+                                        <div class="setting-value col-sm-8">
+                                            <span class="multi-line auto-ellipsis" ng-bind="serverAddress" title="{{serverAddress}}"
+                                                  ng-repeat="serverAddress in context.newTaskInfo.announce | limitTo: (context.collapseTrackers ? 1 : context.newTaskInfo.announce.length)"></span>
                                         </div>
                                     </div>
                                 </div>
@@ -222,7 +245,10 @@
                             </div>
                         </div>
                         <ng-setting ng-repeat="option in context.availableOptions" ng-if="context.optionFilter[option.category]"
-                                    option="option" lazy-save-timeout="0" default-value="context.globalOptions[option.key]"
+                                    option="option" show-placeholder-count="true" support-force-delete-empty="isSupportForceDeleteEmpty(option)"
+                                    lazy-save-timeout="0" delete-key-always-change-value="true"
+                                    default-value="(option.overrideMode !== 'append' && !context.options[option.key] && context.options[option.key] !== '') ? context.globalOptions[option.key] : ''"
+                                    fixed-value="option.overrideMode === 'append' ? context.globalOptions[option.key] : ''"
                                     on-change-value="setOption(key, value, optionStatus)"></ng-setting>
                     </div>
                 </div>

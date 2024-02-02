@@ -140,6 +140,7 @@
 
                     $scope.context.uploadFile = result;
                     $scope.context.newTaskInfo = bittorrentInfo;
+                    $scope.context.collapseTrackers = true;
                     setTabItemShow('filelist', !!bittorrentInfo);
 
                     $scope.context.taskType = result.type;
@@ -170,6 +171,7 @@
                 $scope.context.urls = result.text;
                 $scope.context.uploadFile = null;
                 $scope.context.newTaskInfo = null;
+                $scope.context.collapseTrackers = true;
                 setTabItemShow('filelist', false);
 
                 if (!result.async) {
@@ -254,6 +256,7 @@
             showChooseFilesToolbar: false,
             fileExtensions: [],
             collapsedDirs: {},
+            collapseTrackers: true,
             availableOptions: (function () {
                 var keys = aria2SettingService.getNewTaskOptionKeys();
 
@@ -669,6 +672,7 @@
 
                 $scope.context.uploadFile = result;
                 $scope.context.newTaskInfo = bittorrentInfo;
+                $scope.context.collapseTrackers = true;
                 setTabItemShow('filelist', !!bittorrentInfo);
 
                 $scope.context.taskType = 'torrent';
@@ -686,6 +690,7 @@
             }, function (result) {
                 $scope.context.uploadFile = result;
                 $scope.context.newTaskInfo = null;
+                $scope.context.collapseTrackers = true;
                 setTabItemShow('filelist', false);
 
                 $scope.context.taskType = 'metalink';
@@ -748,8 +753,20 @@
             };
         };
 
+        $scope.isSupportForceDeleteEmpty = function (option) {
+            if ($scope.context.options[option.key] || $scope.context.options[option.key] === '') {
+                return false;
+            }
+
+            if (option.overrideMode === 'append' || aria2SettingService.isOptionKeyRequired(option.key)) {
+                return false;
+            }
+
+            return !!($scope.context.globalOptions[option.key] && $scope.context.globalOptions[option.key].trim());
+        };
+
         $scope.setOption = function (key, value, optionStatus) {
-            if (value !== '') {
+            if (value !== '' || !aria2SettingService.isOptionKeyRequired(key)) {
                 $scope.context.options[key] = value;
             } else {
                 delete $scope.context.options[key];
